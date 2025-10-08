@@ -17,30 +17,40 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------------
-# Universal Credentials and Project ID Setup
+# Universal Credentials and Project ID Setup (Robust Version)
 # --------------------------------------------------------------------------------
-# This logic checks if the app is running on Streamlit Cloud, where st.secrets is available.
-# If not, it falls back to using the local .env file.
-if 'gcp_creds' in st.secrets:
-    # Running on Streamlit Community Cloud
-    PROJECT_ID = st.secrets.gcp_creds.project_id
-    creds_json = dict(st.secrets.gcp_creds)
-    creds_json["private_key"] = creds_json["private_key"].replace('\\n', '\n')
-    
-    with open("temp_creds.json", "w") as f:
-        json.dump(creds_json, f)
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "temp_creds.json"
-    
-else:
-    # Running locally
-    load_dotenv()
-    PROJECT_ID = os.getenv("PROJECT_ID")
-    SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    
-    if not SERVICE_ACCOUNT_FILE or not os.path.exists(SERVICE_ACCOUNT_FILE):
-        st.error(f"Local credentials file not found. Please check your .env file.")
-        st.stop()
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+try:
+    # This block will run on Streamlit Community Cloud
+    if 'gcp_creds' in st.secrets:
+        PROJECT_ID = st.secrets.gcp_creds.project_id
+        creds_json = dict(st.secrets.gcp_creds)
+        creds_json["private_key"] = creds_json["private_key"].replace('\\n', '\n')
+        
+        with open("temp_creds.json", "w") as f:
+            json.dump(creds_json, f)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "temp_creds.json"
+    else:
+        # This block will run locally if secrets.toml doesn't exist or is empty
+        load_dotenv()
+        PROJECT_ID = os.getenv("PROJECT_ID")
+        SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not SERVICE_ACCOUNT_FILE or not os.path.exists(SERVICE_ACCOUNT_FILE):
+            st.error("Local credentials not found. Check your .env file.")
+            st.stop()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+
+except st.errors.StreamlitAPIException as e:
+    # This block handles the case where the app is run locally without a secrets.toml
+    if "No secrets found" in str(e):
+        load_dotenv()
+        PROJECT_ID = os.getenv("PROJECT_ID")
+        SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not SERVICE_ACCOUNT_FILE or not os.path.exists(SERVICE_ACCOUNT_FILE):
+            st.error("Local credentials not found. Check your .env file.")
+            st.stop()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_FILE
+    else:
+        raise e
 
 # --------------------------------------------------------------------------------
 # Session State Initialization
